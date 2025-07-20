@@ -117,12 +117,10 @@ struct HighlightedVerseText: View {
             switch diff.type {
             case .correct:
                 t = Text(diff.word)
-            case .wrong:
-                t = Text(diff.word).foregroundColor(.red).underline()
-            case .missing:
+            case .inserted:
+                t = Text(diff.word).foregroundColor(.red).strikethrough()
+            case .deleted:
                 t = Text(diff.word).foregroundColor(.gray).italic()
-            case .extra:
-                t = Text(diff.word).foregroundColor(.blue).strikethrough()
             }
             return partial + t
         }

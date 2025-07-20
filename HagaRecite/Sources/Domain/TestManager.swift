@@ -68,9 +68,9 @@ class TestManager: ObservableObject {
         var totalChars = 0
         var correctChars = 0
         for (i, verse) in verses.enumerated() {
-            let expectedChars = preprocessChars(verse.verseText)
-            let userChars = i < userVerseInputs.count ? preprocessChars(userVerseInputs[i]) : []
-            let diff = diffChars(expected: expectedChars, user: userChars)
+            let expectedText = verse.verseText
+            let userText = i < userVerseInputs.count ? userVerseInputs[i] : ""
+            let diff = diffChars(expectedText, userText)
             verseMistakes[verse.id] = diff
             let isCorrect = diff.allSatisfy { $0.type == .correct }
             if isCorrect {
@@ -78,7 +78,7 @@ class TestManager: ObservableObject {
             } else {
                 incorrectVerses.append(verse)
             }
-            totalChars += expectedChars.count
+            totalChars += expectedText.count
             correctChars += diff.filter { $0.type == .correct }.count
         }
         // 엣지케이스: 입력/정답이 모두 비어있으면 100% 처리
@@ -122,7 +122,6 @@ class TestManager: ObservableObject {
     
     private func analyzeVerses(userInput: String, expectedText: String, verses: [BibleVerse]) -> ([BibleVerse], [BibleVerse]) {
         // 간단한 분석 (실제로는 더 정교한 로직 필요)
-        let userWords = userInput.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
         let expectedWords = expectedText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
         
         var correctVerses: [BibleVerse] = []

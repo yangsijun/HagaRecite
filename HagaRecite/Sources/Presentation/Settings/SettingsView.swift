@@ -23,7 +23,7 @@ struct SettingsView: View {
                     HStack {
                         Text("개발자")
                         Spacer()
-                        Text("HagaRecite Team")
+                        Text("Yang Sijun")
                             .foregroundColor(.secondary)
                     }
                 }

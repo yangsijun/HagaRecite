@@ -234,9 +234,8 @@ struct BibleVersion: Identifiable, Codable, Hashable {
 
 enum DiffType: String, Codable {
     case correct
-    case wrong
-    case missing
-    case extra
+    case inserted
+    case deleted
 }
 
 struct DiffResult: Identifiable, Codable {
@@ -261,67 +260,6 @@ func preprocessWords(_ text: String) -> [String] {
     return cleaned.components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty }
 }
 
-/// LCS 기반 diff 알고리즘: 정답과 입력을 비교해 DiffResult 배열 반환
-func diffWords(expected: [String], user: [String]) -> [DiffResult] {
-    let n = expected.count
-    let m = user.count
-    // LCS 테이블
-    var dp = Array(repeating: Array(repeating: 0, count: m+1), count: n+1)
-    for i in 0..<n { for j in 0..<m {
-        if expected[i] == user[j] {
-            dp[i+1][j+1] = dp[i][j] + 1
-        } else {
-            dp[i+1][j+1] = max(dp[i][j+1], dp[i+1][j])
-        }
-    }}
-    // 역추적
-    var i = n, j = m
-    var ops: [(Int, Int, DiffType)] = []
-    while i > 0 || j > 0 {
-        if i > 0 && j > 0 && expected[i-1] == user[j-1] {
-            ops.append((i-1, j-1, .correct)); i -= 1; j -= 1
-        } else if j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j]) {
-            ops.append((-1, j-1, .extra)); j -= 1
-        } else if i > 0 && (j == 0 || dp[i][j-1] < dp[i-1][j]) {
-            ops.append((i-1, -1, .missing)); i -= 1
-        }
-    }
-    ops.reverse()
-    // DiffResult 생성
-    var result: [DiffResult] = []
-    var expectedIdx = 0, userIdx = 0
-    for op in ops {
-        switch op.2 {
-        case .correct:
-            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .correct))
-            expectedIdx += 1; userIdx += 1
-        case .missing:
-            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .missing))
-            expectedIdx += 1
-        case .extra:
-            result.append(DiffResult(word: user[userIdx], index: userIdx, type: .extra))
-            userIdx += 1
-        default:
-            break
-        }
-    }
-    // wrong(교체) 처리: missing과 extra가 연속으로 나오면 wrong으로 병합
-    var merged: [DiffResult] = []
-    var idx = 0
-    while idx < result.count {
-        if idx+1 < result.count,
-           result[idx].type == .missing, result[idx+1].type == .extra {
-            // 교체(wrong)
-            merged.append(DiffResult(word: result[idx+1].word, index: result[idx].index, type: .wrong))
-            idx += 2
-        } else {
-            merged.append(result[idx])
-            idx += 1
-        }
-    }
-    return merged
-} 
-
 // MARK: - 문자 단위 전처리 함수
 func preprocessChars(_ text: String) -> [String] {
     let cleaned = text
@@ -330,59 +268,73 @@ func preprocessChars(_ text: String) -> [String] {
     return Array(cleaned).map { String($0) }
 }
 
-/// 문자 단위 LCS 기반 diff
-func diffChars(expected: [String], user: [String]) -> [DiffResult] {
-    let n = expected.count
-    let m = user.count
-    var dp = Array(repeating: Array(repeating: 0, count: m+1), count: n+1)
-    for i in 0..<n { for j in 0..<m {
-        if expected[i] == user[j] {
-            dp[i+1][j+1] = dp[i][j] + 1
-        } else {
-            dp[i+1][j+1] = max(dp[i][j+1], dp[i+1][j])
+/// Myers Diff 알고리즘을 사용한 문자 단위 diff
+func diffChars(_ original: String, _ input: String) -> [DiffResult] {
+    let originalChars = Array(original)
+    let inputChars = Array(input)
+    
+    // Myers Diff 알고리즘 구현
+    let n = originalChars.count
+    let m = inputChars.count
+    
+    // 편집 그래프 초기화
+    var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+    
+    // 첫 번째 행과 열 초기화
+    for i in 0...n {
+        dp[i][0] = i
+    }
+    for j in 0...m {
+        dp[0][j] = j
+    }
+    
+    // 동적 프로그래밍으로 최소 편집 거리 계산
+    for i in 1...n {
+        for j in 1...m {
+            if originalChars[i-1] == inputChars[j-1] {
+                dp[i][j] = dp[i-1][j-1]  // 대각선 이동 (변경 없음)
+            } else {
+                dp[i][j] = min(dp[i-1][j], dp[i][j-1]) + 1  // 삭제 또는 삽입
+            }
         }
-    }}
+    }
+    
+    // 역추적하여 diff 결과 생성
+    var results: [DiffResult] = []
     var i = n, j = m
-    var ops: [(Int, Int, DiffType)] = []
+    var charIndex = 0
+    
     while i > 0 || j > 0 {
-        if i > 0 && j > 0 && expected[i-1] == user[j-1] {
-            ops.append((i-1, j-1, .correct)); i -= 1; j -= 1
-        } else if j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j]) {
-            ops.append((-1, j-1, .extra)); j -= 1
-        } else if i > 0 && (j == 0 || dp[i][j-1] < dp[i-1][j]) {
-            ops.append((i-1, -1, .missing)); i -= 1
+        if i > 0 && j > 0 && originalChars[i-1] == inputChars[j-1] {
+            // 문자가 같음 - 정확함
+            results.insert(DiffResult(
+                word: String(originalChars[i-1]),
+                index: charIndex,
+                type: .correct
+            ), at: 0)
+            i -= 1
+            j -= 1
+            charIndex += 1
+        } else if j > 0 && (i == 0 || dp[i][j-1] <= dp[i-1][j]) {
+            // 삽입
+            results.insert(DiffResult(
+                word: String(inputChars[j-1]),
+                index: charIndex,
+                type: .inserted
+            ), at: 0)
+            j -= 1
+            charIndex += 1
+        } else if i > 0 && (j == 0 || dp[i-1][j] < dp[i][j-1]) {
+            // 삭제
+            results.insert(DiffResult(
+                word: String(originalChars[i-1]),
+                index: charIndex,
+                type: .deleted
+            ), at: 0)
+            i -= 1
+            charIndex += 1
         }
     }
-    ops.reverse()
-    var result: [DiffResult] = []
-    var expectedIdx = 0, userIdx = 0
-    for op in ops {
-        switch op.2 {
-        case .correct:
-            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .correct))
-            expectedIdx += 1; userIdx += 1
-        case .missing:
-            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .missing))
-            expectedIdx += 1
-        case .extra:
-            result.append(DiffResult(word: user[userIdx], index: userIdx, type: .extra))
-            userIdx += 1
-        default:
-            break
-        }
-    }
-    // wrong(교체) 처리: missing과 extra가 연속으로 나오면 wrong으로 병합
-    var merged: [DiffResult] = []
-    var idx = 0
-    while idx < result.count {
-        if idx+1 < result.count,
-           result[idx].type == .missing, result[idx+1].type == .extra {
-            merged.append(DiffResult(word: result[idx+1].word, index: result[idx].index, type: .wrong))
-            idx += 2
-        } else {
-            merged.append(result[idx])
-            idx += 1
-        }
-    }
-    return merged
+    
+    return results
 } 

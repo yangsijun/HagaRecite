@@ -17,7 +17,7 @@ struct PlanListView: View {
         NavigationStack {
             List {
                 if planManager.plans.isEmpty {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 8) {
                         Image(systemName: "list.bullet.clipboard")
                             .font(.system(size: 50))
                             .foregroundColor(.secondary)

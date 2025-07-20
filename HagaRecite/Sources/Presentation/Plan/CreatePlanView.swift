@@ -6,9 +6,13 @@ struct CreatePlanView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var title = ""
-    @State private var selectedBook: BibleBook?
-    @State private var selectedChapter = 1
+    // 시작 구절
+    @State private var startBook: BibleBook?
+    @State private var startChapter = 1
     @State private var startVerse = 1
+    // 끝 구절
+    @State private var endBook: BibleBook?
+    @State private var endChapter = 1
     @State private var endVerse = 1
     @State private var selectedVersion: BibleVersion?
     @State private var targetDate = Date().addingTimeInterval(7 * 24 * 60 * 60) // 7일 후
@@ -18,7 +22,10 @@ struct CreatePlanView: View {
     // 데이터베이스에서 가져온 데이터
     @State private var availableBooks: [BibleBook] = []
     @State private var availableVersions: [BibleVersion] = []
-    @State private var maxVersesInChapter = 1
+    @State private var maxStartChapter = 1
+    @State private var maxEndChapter = 1
+    @State private var maxStartVerse = 1
+    @State private var maxEndVerse = 1
     
     var body: some View {
         NavigationView {
@@ -26,14 +33,19 @@ struct CreatePlanView: View {
                 VStack(spacing: 20) {
                     PlanInfoSection(title: $title)
                     BibleRangeSection(
-                        selectedBook: $selectedBook,
-                        selectedChapter: $selectedChapter,
+                        startBook: $startBook,
+                        startChapter: $startChapter,
                         startVerse: $startVerse,
+                        endBook: $endBook,
+                        endChapter: $endChapter,
                         endVerse: $endVerse,
                         selectedVersion: $selectedVersion,
                         availableBooks: availableBooks,
                         availableVersions: availableVersions,
-                        maxVersesInChapter: maxVersesInChapter
+                        maxStartChapter: maxStartChapter,
+                        maxEndChapter: maxEndChapter,
+                        maxStartVerse: maxStartVerse,
+                        maxEndVerse: maxEndVerse
                     )
                     TargetDateSection(targetDate: $targetDate)
                     CreateButton(
@@ -60,24 +72,29 @@ struct CreatePlanView: View {
             .onAppear {
                 loadData()
             }
-            .onChange(of: selectedBook) { _, _ in
-                resetChapterAndVerses()
-            }
-            .onChange(of: selectedChapter) { _, _ in
-                updateMaxVerses()
-            }
             .onChange(of: selectedVersion) { _, _ in
                 loadBooksForVersion()
+            }
+            .onChange(of: startBook) { _, _ in
+                updateStartChapterAndVerse()
+            }
+            .onChange(of: endBook) { _, _ in
+                updateEndChapterAndVerse()
+            }
+            .onChange(of: startChapter) { _, _ in
+                updateStartVerse()
+            }
+            .onChange(of: endChapter) { _, _ in
+                updateEndVerse()
             }
         }
     }
     
     private var canCreatePlan: Bool {
-        !title.isEmpty && selectedBook != nil && selectedVersion != nil && startVerse <= endVerse
+        !title.isEmpty && startBook != nil && endBook != nil && selectedVersion != nil && (startBook!.order < endBook!.order || (startBook!.order == endBook!.order && (startChapter < endChapter || (startChapter == endChapter && startVerse <= endVerse))))
     }
     
     private func loadData() {
-        // 기본 역본으로 책과 역본 로드
         let defaultVersion = BibleDatabase.shared.getAllVersions().first
         selectedVersion = defaultVersion
         loadBooksForVersion()
@@ -87,59 +104,57 @@ struct CreatePlanView: View {
     private func loadBooksForVersion() {
         guard let version = selectedVersion else { return }
         availableBooks = BibleDatabase.shared.getAllBooks(versionCode: version.code)
+        if let firstBook = availableBooks.first {
+            startBook = firstBook
+            endBook = firstBook
+        }
     }
     
-    private func resetChapterAndVerses() {
-        selectedChapter = 1
+    private func updateStartChapterAndVerse() {
+        guard let book = startBook else { return }
+        maxStartChapter = BibleDatabase.shared.getChaptersForBook(bookCode: book.code, versionCode: selectedVersion?.code ?? "KRV")
+        startChapter = 1
+        updateStartVerse()
+    }
+    private func updateEndChapterAndVerse() {
+        guard let book = endBook else { return }
+        maxEndChapter = BibleDatabase.shared.getChaptersForBook(bookCode: book.code, versionCode: selectedVersion?.code ?? "KRV")
+        endChapter = 1
+        updateEndVerse()
+    }
+    private func updateStartVerse() {
+        guard let book = startBook else { return }
+        maxStartVerse = BibleDatabase.shared.getVersesForChapter(bookCode: book.code, chapter: startChapter, versionCode: selectedVersion?.code ?? "KRV")
         startVerse = 1
-        endVerse = 1
-        updateMaxVerses()
     }
-    
-    private func updateMaxVerses() {
-        guard let book = selectedBook else { return }
-        maxVersesInChapter = BibleDatabase.shared.getVersesForChapter(
-            bookCode: book.code,
-            chapter: selectedChapter,
-            versionCode: selectedVersion?.code ?? "KRV"
-        )
-        // 구절 범위 재조정
-        if startVerse > maxVersesInChapter {
-            startVerse = 1
-        }
-        if endVerse > maxVersesInChapter {
-            endVerse = maxVersesInChapter
-        }
+    private func updateEndVerse() {
+        guard let book = endBook else { return }
+        maxEndVerse = BibleDatabase.shared.getVersesForChapter(bookCode: book.code, chapter: endChapter, versionCode: selectedVersion?.code ?? "KRV")
+        endVerse = 1
     }
     
     private func createPlan() {
-        guard let book = selectedBook, let version = selectedVersion else { return }
-        
-        // 실제 데이터베이스에서 구절 정보 가져오기
+        guard let sBook = startBook, let eBook = endBook, let version = selectedVersion else { return }
         let startBibleVerse = BibleDatabase.shared.getVerse(
-            bookCode: book.code,
-            chapter: selectedChapter,
+            bookCode: sBook.code,
+            chapter: startChapter,
             verse: startVerse,
             versionCode: version.code
         )
-        
         let endBibleVerse = BibleDatabase.shared.getVerse(
-            bookCode: book.code,
-            chapter: selectedChapter,
+            bookCode: eBook.code,
+            chapter: endChapter,
             verse: endVerse,
             versionCode: version.code
         )
-        
-        guard let startVerse = startBibleVerse, let endVerse = endBibleVerse else {
+        guard let startVerseObj = startBibleVerse, let endVerseObj = endBibleVerse else {
             alertMessage = "선택한 구절을 찾을 수 없습니다."
             showingAlert = true
             return
         }
-        
-        let validation = planManager.validatePlan(startVerse: startVerse, endVerse: endVerse, targetDate: targetDate)
-        
+        let validation = planManager.validatePlan(startVerse: startVerseObj, endVerse: endVerseObj, targetDate: targetDate)
         if validation.isValid {
-            if planManager.createPlan(title: title, startVerse: startVerse, endVerse: endVerse, targetDate: targetDate) != nil {
+            if planManager.createPlan(title: title, startVerse: startVerseObj, endVerse: endVerseObj, targetDate: targetDate) != nil {
                 dismiss()
             } else {
                 alertMessage = "계획 생성에 실패했습니다."
@@ -170,31 +185,44 @@ struct PlanInfoSection: View {
 
 // MARK: - 성경 범위 섹션
 struct BibleRangeSection: View {
-    @Binding var selectedBook: BibleBook?
-    @Binding var selectedChapter: Int
+    @Binding var startBook: BibleBook?
+    @Binding var startChapter: Int
     @Binding var startVerse: Int
+    @Binding var endBook: BibleBook?
+    @Binding var endChapter: Int
     @Binding var endVerse: Int
     @Binding var selectedVersion: BibleVersion?
     let availableBooks: [BibleBook]
     let availableVersions: [BibleVersion]
-    let maxVersesInChapter: Int
+    let maxStartChapter: Int
+    let maxEndChapter: Int
+    let maxStartVerse: Int
+    let maxEndVerse: Int
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("성경 범위")
                 .font(.headline)
                 .fontWeight(.semibold)
-            
             VersionPicker(selectedVersion: $selectedVersion, availableVersions: availableVersions)
-            BookPicker(selectedBook: $selectedBook, availableBooks: availableBooks)
-            
-            if let book = selectedBook {
-                ChapterPicker(selectedChapter: $selectedChapter, book: book)
-                VerseRangePicker(
-                    startVerse: $startVerse,
-                    endVerse: $endVerse,
-                    maxVerses: maxVersesInChapter
-                )
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("시작 구절")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    BookPicker(selectedBook: $startBook, availableBooks: availableBooks)
+                    ChapterPicker(selectedChapter: $startChapter, maxChapter: maxStartChapter)
+                    VerseRangePicker(startVerse: $startVerse, endVerse: $endVerse, maxVerses: maxStartVerse, isStart: true)
+                }
+                Spacer(minLength: 24)
+                VStack(alignment: .leading) {
+                    Text("끝 구절")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    BookPicker(selectedBook: $endBook, availableBooks: availableBooks)
+                    ChapterPicker(selectedChapter: $endChapter, maxChapter: maxEndChapter)
+                    VerseRangePicker(startVerse: $startVerse, endVerse: $endVerse, maxVerses: maxEndVerse, isStart: false)
+                }
             }
         }
     }
@@ -216,14 +244,13 @@ struct BookPicker: View {
     }
 }
 
-// MARK: - 장 선택기
+// MARK: - ChapterPicker, VerseRangePicker 수정
 struct ChapterPicker: View {
     @Binding var selectedChapter: Int
-    let book: BibleBook
-    
+    var maxChapter: Int
     var body: some View {
         Picker("장", selection: $selectedChapter) {
-            ForEach(1...book.chapters, id: \.self) { chapter in
+            ForEach(1...maxChapter, id: \.self) { chapter in
                 Text("\(chapter)장").tag(chapter)
             }
         }
@@ -231,28 +258,18 @@ struct ChapterPicker: View {
     }
 }
 
-// MARK: - 구절 범위 선택기
 struct VerseRangePicker: View {
     @Binding var startVerse: Int
     @Binding var endVerse: Int
-    let maxVerses: Int
-    
+    var maxVerses: Int
+    var isStart: Bool = true
     var body: some View {
-        HStack {
-            Picker("시작 구절", selection: $startVerse) {
-                ForEach(1...maxVerses, id: \.self) { verse in
-                    Text("\(verse)절").tag(verse)
-                }
+        Picker(isStart ? "절" : "절", selection: isStart ? $startVerse : $endVerse) {
+            ForEach(1...maxVerses, id: \.self) { verse in
+                Text("\(verse)절").tag(verse)
             }
-            .pickerStyle(MenuPickerStyle())
-            
-            Picker("끝 구절", selection: $endVerse) {
-                ForEach(1...maxVerses, id: \.self) { verse in
-                    Text("\(verse)절").tag(verse)
-                }
-            }
-            .pickerStyle(MenuPickerStyle())
         }
+        .pickerStyle(MenuPickerStyle())
     }
 }
 
@@ -291,14 +308,17 @@ struct TargetDateSection: View {
 struct CreateButton: View {
     let canCreate: Bool
     let action: () -> Void
-    
     var body: some View {
-        Button("계획 생성", action: action)
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(canCreate ? Color.blue : Color.gray)
-            .foregroundColor(.white)
-            .cornerRadius(12)
-            .disabled(!canCreate)
+        Button(action: action) {
+            Text("계획 생성")
+                .fontWeight(.bold)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .padding(.vertical, 8)
+                .background(canCreate ? Color.accentColor : Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(14)
+        }
+        .disabled(!canCreate)
+        .padding(.top, 16)
     }
 } 

@@ -47,7 +47,7 @@ struct TestView: View {
                                         }
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(selectedPlan?.id == plan.id ? Color.blue : Color.clear, lineWidth: 2)
+                                                .stroke(selectedPlan?.id == plan.id ? Color.accentColor : Color.clear, lineWidth: 2)
                                         )
                                 }
                             }
@@ -78,7 +78,7 @@ struct TestView: View {
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(selectedPlan != nil ? Color.blue : Color.gray)
+                                    .background(selectedPlan != nil ? Color.accentColor : Color.gray)
                                     .cornerRadius(12)
                             }
                             .disabled(selectedPlan == nil)

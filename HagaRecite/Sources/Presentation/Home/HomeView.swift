@@ -5,6 +5,7 @@ struct HomeView: View {
     @EnvironmentObject var planManager: PlanManager
     @EnvironmentObject var testManager: TestManager
     @State private var showingCreatePlan = false
+    @State private var showTest = false
     
     var body: some View {
         NavigationView {
@@ -18,9 +19,6 @@ struct HomeView: View {
                     
                     // 진행 중인 계획
                     activePlansSection
-                    
-                    // 빠른 액션
-                    quickActionsSection
                 }
                 .padding()
             }
@@ -29,7 +27,7 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingCreatePlan = true }) {
-                        Image(systemName: "plus.circle")
+                        Image(systemName: "plus")
                             .font(.title2)
                     }
                 }
@@ -38,10 +36,15 @@ struct HomeView: View {
                 CreatePlanView()
                     .environmentObject(planManager)
             }
+            .sheet(isPresented: $showTest) {
+                TestView()
+                    .environmentObject(testManager)
+                    .environmentObject(planManager)
+            }
             .onAppear {
                 planManager.loadTodayVerses()
             }
-            .onChange(of: planManager.plans) { _ in
+            .onChange(of: planManager.plans) {
                 planManager.loadTodayVerses()
             }
         }
@@ -127,37 +130,6 @@ struct HomeView: View {
             }
         }
     }
-    
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("빠른 액션")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 12) {
-                QuickActionCard(
-                    title: "새 계획",
-                    subtitle: "암송 계획 만들기",
-                    icon: "plus.circle.fill",
-                    color: .blue
-                ) {
-                    showingCreatePlan = true
-                }
-                
-                QuickActionCard(
-                    title: "테스트",
-                    subtitle: "암송 테스트",
-                    icon: "checkmark.circle.fill",
-                    color: .green
-                ) {
-                    // 테스트 화면으로 이동
-                }
-            }
-        }
-    }
 }
 
 // MARK: - 오늘의 암송 카드
@@ -235,7 +207,7 @@ struct PlanCard: View {
                 .foregroundColor(.secondary)
             
             ProgressView(value: plan.progress)
-                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                .progressViewStyle(LinearProgressViewStyle(tint: .accentColor))
             
             HStack {
                 Text("\(Int(plan.progress * 100))% 완료")

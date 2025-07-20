@@ -95,23 +95,19 @@ class BibleDatabase {
     }
     
     // MARK: - 책의 장 수 조회
-    private func getChaptersForBook(bookCode: String, versionCode: String) -> Int {
+    func getChaptersForBook(bookCode: String, versionCode: String) -> Int {
         let query = "SELECT MAX(chapter) FROM bible_verse WHERE book_code = ? AND version_code = ?"
-        
         var statement: OpaquePointer?
         let result = sqlite3_prepare_v2(database, query, -1, &statement, nil)
-        
         if result == SQLITE_OK {
             sqlite3_bind_text(statement, 1, (bookCode as NSString).utf8String, -1, nil)
             sqlite3_bind_text(statement, 2, (versionCode as NSString).utf8String, -1, nil)
-            
             if sqlite3_step(statement) == SQLITE_ROW {
                 let chapters = Int(sqlite3_column_int(statement, 0))
                 sqlite3_finalize(statement)
                 return chapters
             }
         }
-        
         sqlite3_finalize(statement)
         return 0
     }

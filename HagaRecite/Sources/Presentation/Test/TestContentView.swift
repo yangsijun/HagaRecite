@@ -18,7 +18,7 @@ struct TestContentView: View {
             // 진행률
             VStack(spacing: 8) {
                 ProgressView(value: session.progress)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                    .progressViewStyle(LinearProgressViewStyle(tint: .accentColor))
                 Text("\(Int(session.progress * 100))% 완료")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -40,7 +40,7 @@ struct TestContentView: View {
                         get: { session.currentUserInput },
                         set: { session.currentUserInput = $0 }
                     ))
-                    .frame(minHeight: 200)
+                    .frame(minHeight: 100)
                     .padding()
                     .background(Color(.systemGray6))
                     .cornerRadius(12)
