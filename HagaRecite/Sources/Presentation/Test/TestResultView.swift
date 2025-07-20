@@ -69,12 +69,12 @@ struct TestResultView: View {
                                 .font(.headline)
                                 .fontWeight(.semibold)
                             
-                            ForEach(result.incorrectVerseIds, id: \.self) { verseId in
+                            ForEach(result.incorrectVerses, id: \.id) { verse in
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("구절 ID: \(verseId)")
+                                    Text(verse.reference)
                                         .font(.subheadline)
                                         .fontWeight(.medium)
-                                    Text("구절 내용")
+                                    Text(verse.verseText)
                                         .font(.body)
                                         .foregroundColor(.secondary)
                                 }

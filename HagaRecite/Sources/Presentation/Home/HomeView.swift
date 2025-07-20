@@ -24,12 +24,12 @@ struct HomeView: View {
                 }
                 .padding()
             }
-            .navigationTitle("하가리사이트")
+            .navigationTitle("Haga 암송")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showingCreatePlan = true }) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus.circle")
                             .font(.title2)
                     }
                 }
@@ -279,4 +279,4 @@ struct QuickActionCard: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-} 
+}

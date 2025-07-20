@@ -11,6 +11,7 @@ import SwiftUI
 struct PlanListView: View {
     @EnvironmentObject var planManager: PlanManager
     @State private var showingCreatePlan = false
+    @State private var selectedPlan: RecitationPlan?
     
     var body: some View {
         NavigationView {
@@ -31,10 +32,12 @@ struct PlanListView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(planManager.plans, id: \.id) { plan in
-                        PlanCard(plan: plan)
-                            .environmentObject(planManager)
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
+                        NavigationLink(destination: PlanDetailView(plan: plan)) {
+                            PlanCard(plan: plan)
+                                .environmentObject(planManager)
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                     .onDelete(perform: deletePlans)
                 }

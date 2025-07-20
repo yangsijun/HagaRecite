@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - 메인 탭 뷰
 struct MainTabView: View {
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var planManager = PlanManager()
     @StateObject private var testManager = TestManager()
     
@@ -35,6 +37,9 @@ struct MainTabView: View {
                     Image(systemName: "gear")
                     Text("설정")
                 }
+        }
+        .onAppear {
+            planManager.setContext(modelContext)
         }
     }
 } 

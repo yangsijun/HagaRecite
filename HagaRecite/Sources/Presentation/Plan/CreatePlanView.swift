@@ -10,10 +10,15 @@ struct CreatePlanView: View {
     @State private var selectedChapter = 1
     @State private var startVerse = 1
     @State private var endVerse = 1
-    @State private var selectedVersion = BibleVersion.allVersions[0]
+    @State private var selectedVersion: BibleVersion?
     @State private var targetDate = Date().addingTimeInterval(7 * 24 * 60 * 60) // 7일 후
     @State private var showingAlert = false
     @State private var alertMessage = ""
+    
+    // 데이터베이스에서 가져온 데이터
+    @State private var availableBooks: [BibleBook] = []
+    @State private var availableVersions: [BibleVersion] = []
+    @State private var maxVersesInChapter = 1
     
     var body: some View {
         NavigationView {
@@ -25,7 +30,10 @@ struct CreatePlanView: View {
                         selectedChapter: $selectedChapter,
                         startVerse: $startVerse,
                         endVerse: $endVerse,
-                        selectedVersion: $selectedVersion
+                        selectedVersion: $selectedVersion,
+                        availableBooks: availableBooks,
+                        availableVersions: availableVersions,
+                        maxVersesInChapter: maxVersesInChapter
                     )
                     TargetDateSection(targetDate: $targetDate)
                     CreateButton(
@@ -49,42 +57,89 @@ struct CreatePlanView: View {
             } message: {
                 Text(alertMessage)
             }
+            .onAppear {
+                loadData()
+            }
+            .onChange(of: selectedBook) { _, _ in
+                resetChapterAndVerses()
+            }
+            .onChange(of: selectedChapter) { _, _ in
+                updateMaxVerses()
+            }
+            .onChange(of: selectedVersion) { _, _ in
+                loadBooksForVersion()
+            }
         }
     }
     
     private var canCreatePlan: Bool {
-        !title.isEmpty && selectedBook != nil && startVerse <= endVerse
+        !title.isEmpty && selectedBook != nil && selectedVersion != nil && startVerse <= endVerse
+    }
+    
+    private func loadData() {
+        // 기본 역본으로 책과 역본 로드
+        let defaultVersion = BibleDatabase.shared.getAllVersions().first
+        selectedVersion = defaultVersion
+        loadBooksForVersion()
+        availableVersions = BibleDatabase.shared.getAllVersions()
+    }
+    
+    private func loadBooksForVersion() {
+        guard let version = selectedVersion else { return }
+        availableBooks = BibleDatabase.shared.getAllBooks(versionCode: version.code)
+    }
+    
+    private func resetChapterAndVerses() {
+        selectedChapter = 1
+        startVerse = 1
+        endVerse = 1
+        updateMaxVerses()
+    }
+    
+    private func updateMaxVerses() {
+        guard let book = selectedBook else { return }
+        maxVersesInChapter = BibleDatabase.shared.getVersesForChapter(
+            bookCode: book.code,
+            chapter: selectedChapter,
+            versionCode: selectedVersion?.code ?? "KRV"
+        )
+        // 구절 범위 재조정
+        if startVerse > maxVersesInChapter {
+            startVerse = 1
+        }
+        if endVerse > maxVersesInChapter {
+            endVerse = maxVersesInChapter
+        }
     }
     
     private func createPlan() {
-        guard let book = selectedBook else { return }
+        guard let book = selectedBook, let version = selectedVersion else { return }
         
-        let startBibleVerse = BibleVerse(
-            id: "\(book.code)_\(selectedChapter)_\(startVerse)_\(selectedVersion.code)",
+        // 실제 데이터베이스에서 구절 정보 가져오기
+        let startBibleVerse = BibleDatabase.shared.getVerse(
             bookCode: book.code,
-            bookName: book.name,
-            bookOrder: book.order,
             chapter: selectedChapter,
             verse: startVerse,
-            verseText: "", // 실제로는 데이터베이스에서 가져와야 함
-            versionCode: selectedVersion.code
+            versionCode: version.code
         )
         
-        let endBibleVerse = BibleVerse(
-            id: "\(book.code)_\(selectedChapter)_\(endVerse)_\(selectedVersion.code)",
+        let endBibleVerse = BibleDatabase.shared.getVerse(
             bookCode: book.code,
-            bookName: book.name,
-            bookOrder: book.order,
             chapter: selectedChapter,
             verse: endVerse,
-            verseText: "", // 실제로는 데이터베이스에서 가져와야 함
-            versionCode: selectedVersion.code
+            versionCode: version.code
         )
         
-        let validation = planManager.validatePlan(startVerse: startBibleVerse, endVerse: endBibleVerse, targetDate: targetDate)
+        guard let startVerse = startBibleVerse, let endVerse = endBibleVerse else {
+            alertMessage = "선택한 구절을 찾을 수 없습니다."
+            showingAlert = true
+            return
+        }
+        
+        let validation = planManager.validatePlan(startVerse: startVerse, endVerse: endVerse, targetDate: targetDate)
         
         if validation.isValid {
-            if planManager.createPlan(title: title, startVerse: startBibleVerse, endVerse: endBibleVerse, targetDate: targetDate) != nil {
+            if planManager.createPlan(title: title, startVerse: startVerse, endVerse: endVerse, targetDate: targetDate) != nil {
                 dismiss()
             } else {
                 alertMessage = "계획 생성에 실패했습니다."
@@ -119,7 +174,10 @@ struct BibleRangeSection: View {
     @Binding var selectedChapter: Int
     @Binding var startVerse: Int
     @Binding var endVerse: Int
-    @Binding var selectedVersion: BibleVersion
+    @Binding var selectedVersion: BibleVersion?
+    let availableBooks: [BibleBook]
+    let availableVersions: [BibleVersion]
+    let maxVersesInChapter: Int
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -127,14 +185,17 @@ struct BibleRangeSection: View {
                 .font(.headline)
                 .fontWeight(.semibold)
             
-            BookPicker(selectedBook: $selectedBook)
+            VersionPicker(selectedVersion: $selectedVersion, availableVersions: availableVersions)
+            BookPicker(selectedBook: $selectedBook, availableBooks: availableBooks)
             
             if let book = selectedBook {
                 ChapterPicker(selectedChapter: $selectedChapter, book: book)
-                VerseRangePicker(startVerse: $startVerse, endVerse: $endVerse)
+                VerseRangePicker(
+                    startVerse: $startVerse,
+                    endVerse: $endVerse,
+                    maxVerses: maxVersesInChapter
+                )
             }
-            
-            VersionPicker(selectedVersion: $selectedVersion)
         }
     }
 }
@@ -142,11 +203,12 @@ struct BibleRangeSection: View {
 // MARK: - 책 선택기
 struct BookPicker: View {
     @Binding var selectedBook: BibleBook?
+    let availableBooks: [BibleBook]
     
     var body: some View {
         Picker("책", selection: $selectedBook) {
             Text("선택하세요").tag(nil as BibleBook?)
-            ForEach(BibleBook.allBooks) { book in
+            ForEach(availableBooks) { book in
                 Text(book.name).tag(book as BibleBook?)
             }
         }
@@ -173,18 +235,19 @@ struct ChapterPicker: View {
 struct VerseRangePicker: View {
     @Binding var startVerse: Int
     @Binding var endVerse: Int
+    let maxVerses: Int
     
     var body: some View {
         HStack {
             Picker("시작 구절", selection: $startVerse) {
-                ForEach(1...50, id: \.self) { verse in
+                ForEach(1...maxVerses, id: \.self) { verse in
                     Text("\(verse)절").tag(verse)
                 }
             }
             .pickerStyle(MenuPickerStyle())
             
             Picker("끝 구절", selection: $endVerse) {
-                ForEach(1...50, id: \.self) { verse in
+                ForEach(1...maxVerses, id: \.self) { verse in
                     Text("\(verse)절").tag(verse)
                 }
             }
@@ -195,12 +258,14 @@ struct VerseRangePicker: View {
 
 // MARK: - 역본 선택기
 struct VersionPicker: View {
-    @Binding var selectedVersion: BibleVersion
+    @Binding var selectedVersion: BibleVersion?
+    let availableVersions: [BibleVersion]
     
     var body: some View {
         Picker("역본", selection: $selectedVersion) {
-            ForEach(BibleVersion.allVersions) { version in
-                Text(version.name).tag(version)
+            Text("선택하세요").tag(nil as BibleVersion?)
+            ForEach(availableVersions) { version in
+                Text(version.name).tag(version as BibleVersion?)
             }
         }
         .pickerStyle(MenuPickerStyle())
