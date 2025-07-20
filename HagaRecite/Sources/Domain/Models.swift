@@ -167,9 +167,9 @@ class TestResult {
     var incorrectVerseIds: [String]
     var userInput: String
     var expectedText: String
-    var verseMistakes: [String: [Int]] // verseId별 오답 인덱스
+    var verseMistakes: [String: [DiffResult]] // verseId별 DiffResult 배열
     
-    init(plan: RecitationPlan, testType: TestType, accuracy: Double, totalVerses: Int, correctVerses: Int, incorrectVerses: [BibleVerse], userInput: String, expectedText: String, verseMistakes: [String: [Int]]) {
+    init(plan: RecitationPlan, testType: TestType, accuracy: Double, totalVerses: Int, correctVerses: Int, incorrectVerses: [BibleVerse], userInput: String, expectedText: String, verseMistakes: [String: [DiffResult]]) {
         self.id = UUID()
         self.plan = plan
         self.testDate = Date()
@@ -228,4 +228,161 @@ struct BibleVersion: Identifiable, Codable, Hashable {
     static var allVersions: [BibleVersion] {
         return BibleDatabase.shared.getAllVersions()
     }
+} 
+
+// MARK: - DiffResult 및 Diff 알고리즘
+
+enum DiffType: String, Codable {
+    case correct
+    case wrong
+    case missing
+    case extra
+}
+
+struct DiffResult: Identifiable, Codable {
+    let id: UUID
+    let word: String
+    let index: Int
+    let type: DiffType
+    init(word: String, index: Int, type: DiffType) {
+        self.id = UUID()
+        self.word = word
+        self.index = index
+        self.type = type
+    }
+}
+
+// MARK: - 텍스트 전처리 함수
+func preprocessWords(_ text: String) -> [String] {
+    // 구두점 제거, 소문자화, 공백 정리
+    let cleaned = text
+        .lowercased()
+        .replacingOccurrences(of: "[.,!?;:()\\[\\]\"']", with: "", options: .regularExpression)
+    return cleaned.components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty }
+}
+
+/// LCS 기반 diff 알고리즘: 정답과 입력을 비교해 DiffResult 배열 반환
+func diffWords(expected: [String], user: [String]) -> [DiffResult] {
+    let n = expected.count
+    let m = user.count
+    // LCS 테이블
+    var dp = Array(repeating: Array(repeating: 0, count: m+1), count: n+1)
+    for i in 0..<n { for j in 0..<m {
+        if expected[i] == user[j] {
+            dp[i+1][j+1] = dp[i][j] + 1
+        } else {
+            dp[i+1][j+1] = max(dp[i][j+1], dp[i+1][j])
+        }
+    }}
+    // 역추적
+    var i = n, j = m
+    var ops: [(Int, Int, DiffType)] = []
+    while i > 0 || j > 0 {
+        if i > 0 && j > 0 && expected[i-1] == user[j-1] {
+            ops.append((i-1, j-1, .correct)); i -= 1; j -= 1
+        } else if j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j]) {
+            ops.append((-1, j-1, .extra)); j -= 1
+        } else if i > 0 && (j == 0 || dp[i][j-1] < dp[i-1][j]) {
+            ops.append((i-1, -1, .missing)); i -= 1
+        }
+    }
+    ops.reverse()
+    // DiffResult 생성
+    var result: [DiffResult] = []
+    var expectedIdx = 0, userIdx = 0
+    for op in ops {
+        switch op.2 {
+        case .correct:
+            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .correct))
+            expectedIdx += 1; userIdx += 1
+        case .missing:
+            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .missing))
+            expectedIdx += 1
+        case .extra:
+            result.append(DiffResult(word: user[userIdx], index: userIdx, type: .extra))
+            userIdx += 1
+        default:
+            break
+        }
+    }
+    // wrong(교체) 처리: missing과 extra가 연속으로 나오면 wrong으로 병합
+    var merged: [DiffResult] = []
+    var idx = 0
+    while idx < result.count {
+        if idx+1 < result.count,
+           result[idx].type == .missing, result[idx+1].type == .extra {
+            // 교체(wrong)
+            merged.append(DiffResult(word: result[idx+1].word, index: result[idx].index, type: .wrong))
+            idx += 2
+        } else {
+            merged.append(result[idx])
+            idx += 1
+        }
+    }
+    return merged
+} 
+
+// MARK: - 문자 단위 전처리 함수
+func preprocessChars(_ text: String) -> [String] {
+    let cleaned = text
+        .lowercased()
+        .replacingOccurrences(of: "[.,!?;:()\\[\\]\"']", with: "", options: .regularExpression)
+    return Array(cleaned).map { String($0) }
+}
+
+/// 문자 단위 LCS 기반 diff
+func diffChars(expected: [String], user: [String]) -> [DiffResult] {
+    let n = expected.count
+    let m = user.count
+    var dp = Array(repeating: Array(repeating: 0, count: m+1), count: n+1)
+    for i in 0..<n { for j in 0..<m {
+        if expected[i] == user[j] {
+            dp[i+1][j+1] = dp[i][j] + 1
+        } else {
+            dp[i+1][j+1] = max(dp[i][j+1], dp[i+1][j])
+        }
+    }}
+    var i = n, j = m
+    var ops: [(Int, Int, DiffType)] = []
+    while i > 0 || j > 0 {
+        if i > 0 && j > 0 && expected[i-1] == user[j-1] {
+            ops.append((i-1, j-1, .correct)); i -= 1; j -= 1
+        } else if j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j]) {
+            ops.append((-1, j-1, .extra)); j -= 1
+        } else if i > 0 && (j == 0 || dp[i][j-1] < dp[i-1][j]) {
+            ops.append((i-1, -1, .missing)); i -= 1
+        }
+    }
+    ops.reverse()
+    var result: [DiffResult] = []
+    var expectedIdx = 0, userIdx = 0
+    for op in ops {
+        switch op.2 {
+        case .correct:
+            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .correct))
+            expectedIdx += 1; userIdx += 1
+        case .missing:
+            result.append(DiffResult(word: expected[expectedIdx], index: expectedIdx, type: .missing))
+            expectedIdx += 1
+        case .extra:
+            result.append(DiffResult(word: user[userIdx], index: userIdx, type: .extra))
+            userIdx += 1
+        default:
+            break
+        }
+    }
+    // wrong(교체) 처리: missing과 extra가 연속으로 나오면 wrong으로 병합
+    var merged: [DiffResult] = []
+    var idx = 0
+    while idx < result.count {
+        if idx+1 < result.count,
+           result[idx].type == .missing, result[idx+1].type == .extra {
+            merged.append(DiffResult(word: result[idx+1].word, index: result[idx].index, type: .wrong))
+            idx += 2
+        } else {
+            merged.append(result[idx])
+            idx += 1
+        }
+    }
+    return merged
 } 

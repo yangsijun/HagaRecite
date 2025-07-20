@@ -62,31 +62,32 @@ class TestManager: ObservableObject {
     func submitTestResult(userInput: String, expectedText: String, verses: [BibleVerse]) -> TestResult {
         // 구절별로 입력 분리 (줄바꿈 기준)
         let userVerseInputs = userInput.components(separatedBy: CharacterSet.newlines).map { $0.trimmingCharacters(in: .whitespaces) }
-        var verseMistakes: [String: [Int]] = [:]
+        var verseMistakes: [String: [DiffResult]] = [:]
         var correctVerses: [BibleVerse] = []
         var incorrectVerses: [BibleVerse] = []
-        var totalWords = 0
-        var correctWords = 0
+        var totalChars = 0
+        var correctChars = 0
         for (i, verse) in verses.enumerated() {
-            let expectedWords = verse.verseText.components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty }
-            let userWords = i < userVerseInputs.count ? userVerseInputs[i].components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty } : []
-            var mistakes: [Int] = []
-            for (j, expectedWord) in expectedWords.enumerated() {
-                totalWords += 1
-                if j >= userWords.count || userWords[j] != expectedWord {
-                    mistakes.append(j)
-                } else {
-                    correctWords += 1
-                }
-            }
-            if mistakes.isEmpty {
+            let expectedChars = preprocessChars(verse.verseText)
+            let userChars = i < userVerseInputs.count ? preprocessChars(userVerseInputs[i]) : []
+            let diff = diffChars(expected: expectedChars, user: userChars)
+            verseMistakes[verse.id] = diff
+            let isCorrect = diff.allSatisfy { $0.type == .correct }
+            if isCorrect {
                 correctVerses.append(verse)
             } else {
                 incorrectVerses.append(verse)
-                verseMistakes[verse.id] = mistakes
             }
+            totalChars += expectedChars.count
+            correctChars += diff.filter { $0.type == .correct }.count
         }
-        let accuracy = totalWords > 0 ? Double(correctWords) / Double(totalWords) : 0.0
+        // 엣지케이스: 입력/정답이 모두 비어있으면 100% 처리
+        let accuracy: Double
+        if totalChars == 0 && userInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            accuracy = 1.0
+        } else {
+            accuracy = totalChars > 0 ? Double(correctChars) / Double(totalChars) : 0.0
+        }
         guard let currentTest = currentTest else {
             fatalError("현재 테스트 세션이 없습니다.")
         }

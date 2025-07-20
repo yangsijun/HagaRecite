@@ -80,7 +80,7 @@ struct TestResultView: View {
                                             .foregroundColor(.secondary)
                                         HighlightedVerseText(
                                             verse: verse,
-                                            mistakeIndices: result.verseMistakes[verse.id] ?? []
+                                            diffs: result.verseMistakes[verse.id] ?? []
                                         )
                                     }
                                 }
@@ -109,16 +109,25 @@ struct TestResultView: View {
 // MARK: - 틀린 단어 하이라이트 뷰
 struct HighlightedVerseText: View {
     let verse: BibleVerse
-    let mistakeIndices: [Int]
+    let diffs: [DiffResult]
 
     var body: some View {
-        let words = verse.verseText.components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty }
-        // 단어별로 Text 조합
-        words.enumerated().reduce(Text("")) { partialResult, pair in
-            let (i, word) = pair
-            let text = Text(word)
-                .foregroundColor(mistakeIndices.contains(i) ? .red : .primary)
-            return partialResult + text + Text(i < words.count - 1 ? " " : "")
+        diffs.reduce(Text("")) { partial, diff in
+            let t: Text
+            switch diff.type {
+            case .correct:
+                t = Text(diff.word)
+            case .wrong:
+                t = Text(diff.word).foregroundColor(.red).underline()
+            case .missing:
+                t = Text(diff.word).foregroundColor(.gray).italic()
+            case .extra:
+                t = Text(diff.word).foregroundColor(.blue).strikethrough()
+            }
+            return partial + t
         }
+        .font(.body)
+        .multilineTextAlignment(.leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
