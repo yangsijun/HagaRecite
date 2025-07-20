@@ -60,13 +60,36 @@ class TestManager: ObservableObject {
     // MARK: - 테스트 결과 처리
     
     func submitTestResult(userInput: String, expectedText: String, verses: [BibleVerse]) -> TestResult {
-        let accuracy = calculateAccuracy(userInput: userInput, expectedText: expectedText)
-        let (correctVerses, incorrectVerses) = analyzeVerses(userInput: userInput, expectedText: expectedText, verses: verses)
-        
+        // 구절별로 입력 분리 (줄바꿈 기준)
+        let userVerseInputs = userInput.components(separatedBy: CharacterSet.newlines).map { $0.trimmingCharacters(in: .whitespaces) }
+        var verseMistakes: [String: [Int]] = [:]
+        var correctVerses: [BibleVerse] = []
+        var incorrectVerses: [BibleVerse] = []
+        var totalWords = 0
+        var correctWords = 0
+        for (i, verse) in verses.enumerated() {
+            let expectedWords = verse.verseText.components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty }
+            let userWords = i < userVerseInputs.count ? userVerseInputs[i].components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty } : []
+            var mistakes: [Int] = []
+            for (j, expectedWord) in expectedWords.enumerated() {
+                totalWords += 1
+                if j >= userWords.count || userWords[j] != expectedWord {
+                    mistakes.append(j)
+                } else {
+                    correctWords += 1
+                }
+            }
+            if mistakes.isEmpty {
+                correctVerses.append(verse)
+            } else {
+                incorrectVerses.append(verse)
+                verseMistakes[verse.id] = mistakes
+            }
+        }
+        let accuracy = totalWords > 0 ? Double(correctWords) / Double(totalWords) : 0.0
         guard let currentTest = currentTest else {
             fatalError("현재 테스트 세션이 없습니다.")
         }
-        
         let result = TestResult(
             plan: currentTest.plan,
             testType: currentTest.testType,
@@ -75,12 +98,11 @@ class TestManager: ObservableObject {
             correctVerses: correctVerses.count,
             incorrectVerses: incorrectVerses,
             userInput: userInput,
-            expectedText: expectedText
+            expectedText: expectedText,
+            verseMistakes: verseMistakes
         )
-        
         testResults.append(result)
         saveTestResults()
-        
         return result
     }
     
@@ -178,18 +200,28 @@ class TestSession: ObservableObject {
     let verses: [BibleVerse]
     
     @Published var currentVerseIndex: Int = 0
-    @Published var userInput: String = ""
+    @Published var userInputs: [String]
     @Published var isCompleted: Bool = false
     
     init(plan: RecitationPlan, testType: TestType, verses: [BibleVerse]) {
         self.plan = plan
         self.testType = testType
         self.verses = verses
+        self.userInputs = Array(repeating: "", count: verses.count)
     }
     
     var currentVerse: BibleVerse? {
         guard currentVerseIndex < verses.count else { return nil }
         return verses[currentVerseIndex]
+    }
+    
+    var currentUserInput: String {
+        get { userInputs[safe: currentVerseIndex] ?? "" }
+        set {
+            if userInputs.indices.contains(currentVerseIndex) {
+                userInputs[currentVerseIndex] = newValue
+            }
+        }
     }
     
     var progress: Double {
@@ -204,7 +236,6 @@ class TestSession: ObservableObject {
     func nextVerse() {
         if currentVerseIndex < verses.count - 1 {
             currentVerseIndex += 1
-            userInput = ""
         } else {
             isCompleted = true
         }
@@ -213,12 +244,18 @@ class TestSession: ObservableObject {
     func previousVerse() {
         if currentVerseIndex > 0 {
             currentVerseIndex -= 1
-            userInput = ""
         }
     }
     
     func getFullText() -> String {
-        return verses.map { $0.verseText }.joined(separator: "\n\n")
+        return userInputs.joined(separator: "\n")
+    }
+}
+
+// 배열 safe 인덱스 확장
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }
 

@@ -167,8 +167,9 @@ class TestResult {
     var incorrectVerseIds: [String]
     var userInput: String
     var expectedText: String
+    var verseMistakes: [String: [Int]] // verseId별 오답 인덱스
     
-    init(plan: RecitationPlan, testType: TestType, accuracy: Double, totalVerses: Int, correctVerses: Int, incorrectVerses: [BibleVerse], userInput: String, expectedText: String) {
+    init(plan: RecitationPlan, testType: TestType, accuracy: Double, totalVerses: Int, correctVerses: Int, incorrectVerses: [BibleVerse], userInput: String, expectedText: String, verseMistakes: [String: [Int]]) {
         self.id = UUID()
         self.plan = plan
         self.testDate = Date()
@@ -179,27 +180,11 @@ class TestResult {
         self.incorrectVerseIds = incorrectVerses.map { $0.id }
         self.userInput = userInput
         self.expectedText = expectedText
+        self.verseMistakes = verseMistakes
     }
     
     var incorrectVerses: [BibleVerse] {
-        // 실제 구현에서는 BibleDatabase에서 구절들을 가져와야 함
-        return incorrectVerseIds.compactMap { verseId in
-            // verseId 형식: "BOOK_CODE_CHAPTER_VERSE_VERSION"
-            let components = verseId.split(separator: "_")
-            guard components.count >= 4 else { return nil }
-            
-            let bookCode = String(components[0])
-            let chapter = Int(components[1]) ?? 0
-            let verse = Int(components[2]) ?? 0
-            let versionCode = String(components[3])
-            
-            return BibleDatabase.shared.getVerse(
-                bookCode: bookCode,
-                chapter: chapter,
-                verse: verse,
-                versionCode: versionCode
-            )
-        }
+        return incorrectVerseIds.compactMap { BibleDatabase.shared.getVerseById($0) }
     }
 }
 

@@ -74,9 +74,15 @@ struct TestResultView: View {
                                     Text(verse.reference)
                                         .font(.subheadline)
                                         .fontWeight(.medium)
-                                    Text(verse.verseText)
-                                        .font(.body)
-                                        .foregroundColor(.secondary)
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text("정답:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        HighlightedVerseText(
+                                            verse: verse,
+                                            mistakeIndices: result.verseMistakes[verse.id] ?? []
+                                        )
+                                    }
                                 }
                                 .padding()
                                 .background(Color(.systemBackground))
@@ -96,6 +102,23 @@ struct TestResultView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - 틀린 단어 하이라이트 뷰
+struct HighlightedVerseText: View {
+    let verse: BibleVerse
+    let mistakeIndices: [Int]
+
+    var body: some View {
+        let words = verse.verseText.components(separatedBy: CharacterSet.whitespacesAndNewlines).filter { !$0.isEmpty }
+        // 단어별로 Text 조합
+        words.enumerated().reduce(Text("")) { partialResult, pair in
+            let (i, word) = pair
+            let text = Text(word)
+                .foregroundColor(mistakeIndices.contains(i) ? .red : .primary)
+            return partialResult + text + Text(i < words.count - 1 ? " " : "")
         }
     }
 }

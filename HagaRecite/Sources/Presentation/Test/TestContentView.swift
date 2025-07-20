@@ -36,15 +36,18 @@ struct TestContentView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
-                    TextEditor(text: $session.userInput)
-                        .frame(minHeight: 200)
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        )
+                    TextEditor(text: Binding(
+                        get: { session.currentUserInput },
+                        set: { session.currentUserInput = $0 }
+                    ))
+                    .frame(minHeight: 200)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
                 }
                 .padding()
             }
@@ -65,7 +68,7 @@ struct TestContentView: View {
                         session.nextVerse()
                     }
                 }
-                .disabled(session.userInput.isEmpty)
+                .disabled(session.currentUserInput.isEmpty)
             }
             .padding()
         }
@@ -73,8 +76,8 @@ struct TestContentView: View {
     
     private func completeTest() {
         let result = testManager.submitTestResult(
-            userInput: session.userInput,
-            expectedText: session.getFullText(),
+            userInput: session.getFullText(),
+            expectedText: session.verses.map { $0.verseText }.joined(separator: "\n"),
             verses: session.verses
         )
         onComplete(result)

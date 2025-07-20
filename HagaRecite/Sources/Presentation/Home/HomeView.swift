@@ -38,6 +38,12 @@ struct HomeView: View {
                 CreatePlanView()
                     .environmentObject(planManager)
             }
+            .onAppear {
+                planManager.loadTodayVerses()
+            }
+            .onChange(of: planManager.plans) { _ in
+                planManager.loadTodayVerses()
+            }
         }
     }
     
