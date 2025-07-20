@@ -27,26 +27,36 @@ class PlanManager: ObservableObject {
             startDate: startDate,
             targetDate: targetDate
         )
-        // 일별 구절 분배
-        let totalDays = Calendar.current.dateComponents([.day], from: startDate, to: targetDate).day ?? 1
+        print("startDate: \(startDate)")
+        print("targetDate: \(targetDate)")
         let verses = bibleDatabase.getVersesInRange(startVerse: startVerse, endVerse: endVerse, versionCode: startVerse.versionCode)
         if verses.isEmpty {
             return nil
         }
-        let versesPerDay = max(1, verses.count / totalDays)
-        let remainingVerses = verses.count % totalDays
+        let calendar = Calendar.current
+        let startDay = calendar.startOfDay(for: startDate)
+        let endDay = calendar.startOfDay(for: targetDate)
+        let totalDays = (calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0) + 1
+        print("startDay: \(startDay)")
+        print("endDay: \(endDay)")
+        print("totalDays: \(totalDays)")
+        let base = verses.count / totalDays
+        print("base: \(base)")
+        let extra = verses.count % totalDays
+        print("extra: \(extra)")
         var currentVerseIndex = 0
         for day in 0..<totalDays {
-            let dayDate = Calendar.current.date(byAdding: .day, value: day, to: startDate) ?? startDate
-            let versesForThisDay = versesPerDay + (day < remainingVerses ? 1 : 0)
-            let dayVerses = Array(verses[currentVerseIndex..<min(currentVerseIndex + versesForThisDay, verses.count)])
+            let count = base + (day < extra ? 1 : 0)
+            if currentVerseIndex >= verses.count {
+                break // 더 이상 분배할 구절이 없으면 종료
+            }
+            let end = min(currentVerseIndex + count, verses.count)
+            let dayVerses = Array(verses[currentVerseIndex..<end])
+            let dayDate = calendar.date(byAdding: .day, value: day, to: startDay) ?? startDay
             let dailyVerse = DailyVerse(date: dayDate, verses: dayVerses, plan: plan)
             plan.dailyVerses.append(dailyVerse)
             context.insert(dailyVerse)
-            currentVerseIndex += versesForThisDay
-            if currentVerseIndex >= verses.count {
-                break
-            }
+            currentVerseIndex = end
         }
         context.insert(plan)
         fetchPlans()
@@ -126,9 +136,9 @@ class PlanManager: ObservableObject {
     // MARK: - 계획 검증
     func validatePlan(startVerse: BibleVerse, endVerse: BibleVerse, targetDate: Date) -> PlanValidationResult {
         let startDate = Date()
-        let totalDays = Calendar.current.dateComponents([.day], from: startDate, to: targetDate).day ?? 1
-        if totalDays <= 0 {
-            return .invalidDate("목표 날짜는 오늘 이후여야 합니다.")
+        let totalDays = (Calendar.current.dateComponents([.day], from: startDate, to: targetDate).day ?? 0) + 1
+        if totalDays < 1 {
+            return .invalidDate("목표 날짜는 오늘 또는 이후여야 합니다.")
         }
         let verses = bibleDatabase.getVersesInRange(startVerse: startVerse, endVerse: endVerse, versionCode: startVerse.versionCode)
         if verses.isEmpty {

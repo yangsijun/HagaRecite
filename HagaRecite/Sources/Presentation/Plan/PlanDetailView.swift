@@ -52,9 +52,18 @@ struct PlanDetailView: View {
                             Text(dailyVerse.reference)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            Text(dailyVerse.displayText)
-                                .font(.body)
-                                .foregroundColor(.primary)
+                            // 각 절별로 절 번호와 구절 표시
+                            ForEach(dailyVerse.verses, id: \.id) { verse in
+                                HStack(alignment: .top, spacing: 4) {
+                                    Text("\(verse.verse)절")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.accentColor)
+                                    Text(verse.verseText)
+                                        .font(.body)
+                                        .foregroundColor(.primary)
+                                }
+                            }
                         }
                         .padding()
                         .background(Color(.systemBackground))

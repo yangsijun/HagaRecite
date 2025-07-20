@@ -14,7 +14,7 @@ struct PlanListView: View {
     @State private var selectedPlan: RecitationPlan?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 if planManager.plans.isEmpty {
                     VStack(spacing: 16) {
@@ -32,16 +32,20 @@ struct PlanListView: View {
                     .listRowBackground(Color.clear)
                 } else {
                     ForEach(planManager.plans, id: \.id) { plan in
-                        NavigationLink(destination: PlanDetailView(plan: plan)) {
-                            PlanCard(plan: plan)
-                                .environmentObject(planManager)
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                        PlanCard(plan: plan)
+                            .environmentObject(planManager)
+                            .onTapGesture {
+                                selectedPlan = plan
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
                     .onDelete(perform: deletePlans)
                 }
             }
+            .listStyle(PlainListStyle())
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemBackground))
             .navigationTitle("암송 계획")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -54,6 +58,9 @@ struct PlanListView: View {
                 CreatePlanView()
                     .environmentObject(planManager)
             }
+            .navigationDestination(item: $selectedPlan) { plan in
+                PlanDetailView(plan: plan)
+            }
         }
     }
     
@@ -63,3 +70,6 @@ struct PlanListView: View {
         }
     }
 }
+
+// RecitationPlan이 Identifiable을 준수하도록 확장 (필요시)
+extension RecitationPlan: Identifiable {}

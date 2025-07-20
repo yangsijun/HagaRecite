@@ -16,82 +16,84 @@ struct TestView: View {
     @State private var showingTest = false
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                if planManager.plans.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "checkmark.circle")
-                            .font(.system(size: 50))
-                            .foregroundColor(.secondary)
-                        Text("테스트할 계획이 없습니다")
-                            .font(.headline)
-                        Text("암송 계획을 먼저 만들어보세요")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    VStack(spacing: 20) {
-                        // 계획 선택
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("테스트할 계획 선택")
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    if planManager.plans.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(systemName: "checkmark.circle")
+                                .font(.system(size: 50))
+                                .foregroundColor(.secondary)
+                            Text("테스트할 계획이 없습니다")
                                 .font(.headline)
-                                .fontWeight(.semibold)
-                            
-                            ForEach(planManager.plans, id: \.id) { plan in
-                                PlanCard(plan: plan)
-                                    .environmentObject(planManager)
-                                    .onTapGesture {
-                                        selectedPlan = plan
-                                    }
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(selectedPlan?.id == plan.id ? Color.blue : Color.clear, lineWidth: 2)
-                                    )
-                            }
+                            Text("암송 계획을 먼저 만들어보세요")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
                         }
-                        
-                        // 테스트 타입 선택
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("테스트 타입")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                            
-                            Picker("테스트 타입", selection: $selectedTestType) {
-                                ForEach(TestType.allCases, id: \.self) { testType in
-                                    Text(testType.displayName).tag(testType)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        VStack(spacing: 20) {
+                            // 계획 선택
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("테스트할 계획 선택")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                
+                                ForEach(planManager.plans, id: \.id) { plan in
+                                    PlanCard(plan: plan)
+                                        .environmentObject(planManager)
+                                        .onTapGesture {
+                                            selectedPlan = plan
+                                        }
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(selectedPlan?.id == plan.id ? Color.blue : Color.clear, lineWidth: 2)
+                                        )
                                 }
                             }
-                            .pickerStyle(SegmentedPickerStyle())
-                        }
-                        
-                        // 테스트 시작 버튼
-                        Button(action: {
-                            if selectedPlan != nil {
-                                showingTest = true
+                            
+                            // 테스트 타입 선택
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("테스트 타입")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                
+                                Picker("테스트 타입", selection: $selectedTestType) {
+                                    ForEach(TestType.allCases, id: \.self) { testType in
+                                        Text(testType.displayName).tag(testType)
+                                    }
+                                }
+                                .pickerStyle(SegmentedPickerStyle())
                             }
-                        }) {
-                            Text("테스트 시작")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(selectedPlan != nil ? Color.blue : Color.gray)
-                                .cornerRadius(12)
+                            
+                            // 테스트 시작 버튼
+                            Button(action: {
+                                if selectedPlan != nil {
+                                    showingTest = true
+                                }
+                            }) {
+                                Text("테스트 시작")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(selectedPlan != nil ? Color.blue : Color.gray)
+                                    .cornerRadius(12)
+                            }
+                            .disabled(selectedPlan == nil)
+                            
+                            Spacer()
                         }
-                        .disabled(selectedPlan == nil)
-                        
-                        Spacer()
+                        .padding()
                     }
-                    .padding()
                 }
-            }
-            .navigationTitle("암송 테스트")
-            .sheet(isPresented: $showingTest) {
-                if let plan = selectedPlan {
-                    TestSessionView(plan: plan, testType: selectedTestType)
-                        .environmentObject(testManager)
+                .navigationTitle("암송 테스트")
+                .sheet(isPresented: $showingTest) {
+                    if let plan = selectedPlan {
+                        TestSessionView(plan: plan, testType: selectedTestType)
+                            .environmentObject(testManager)
+                    }
                 }
             }
         }
